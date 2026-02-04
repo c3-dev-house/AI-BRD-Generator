@@ -37,6 +37,8 @@ type SavedDiagram = {
   code: string
   type: string
   saved: boolean
+  encodedImage?: string // Base64 image data (SVG or PNG)
+  imageUrl?: string // Legacy URL support
 }
 
 export default function BRDGenerator() {
@@ -186,7 +188,7 @@ export default function BRDGenerator() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           extractedText: text,
-          diagramType: "process",
+          diagramType: "current-state",
         }),
       })
 
@@ -195,7 +197,7 @@ export default function BRDGenerator() {
       if (currentStateData.success) {
         const currentStateDiagram: SavedDiagram = {
           id: "current-state-diagram",
-          code: currentStateData.mermaidCode,
+          code: currentStateData.dotCode, // Updated to use DOT code
           type: "Current State Process",
           saved: true, // Marked as saved so it's included in BRD
         }
@@ -207,7 +209,7 @@ export default function BRDGenerator() {
           body: JSON.stringify({
             extractedText:
               text + "\n\nGenerate a FUTURE STATE diagram showing the improved, automated process with AI integration.",
-            diagramType: "process",
+            diagramType: "future-state", // Updated type for clarity
           }),
         })
 
@@ -216,7 +218,7 @@ export default function BRDGenerator() {
         if (futureStateData.success) {
           const futureStateDiagram: SavedDiagram = {
             id: "future-state-diagram",
-            code: futureStateData.mermaidCode,
+            code: futureStateData.dotCode, // Updated to use DOT code
             type: "Future State Process",
             saved: true, // Marked as saved so it's included in BRD
           }
@@ -242,7 +244,7 @@ export default function BRDGenerator() {
   const handleRAGContinue = (selectedChunks: string[]) => {
     setRagContext(selectedChunks)
     setStep("diagram")
-    
+
     // Auto-generate diagrams when moving to diagram step
     if (extractedText) {
       setTimeout(() => {
@@ -257,8 +259,12 @@ export default function BRDGenerator() {
     setStep("analyze")
   }
 
-  const handleProcessDiagramSave = (diagramCode: string, diagramId: string) => {
+  const handleProcessDiagramSave = (diagramCode: string, diagramId: string, encodedImage?: string) => {
     console.log("[v0] Diagram saved with ID:", diagramId)
+    if (encodedImage) {
+      console.log("[v0] Received encoded image length:", encodedImage.length)
+    }
+
     setProcessDiagram(diagramCode)
     setDiagrams((prev) => [
       ...prev,
@@ -267,6 +273,7 @@ export default function BRDGenerator() {
         code: diagramCode,
         type: "process",
         saved: true,
+        encodedImage,
       },
     ])
     setSuccessMessage("Process map saved successfully!")
@@ -391,6 +398,7 @@ export default function BRDGenerator() {
     }
   }
 
+  /*
   const handleDownloadPDF = async () => {
     try {
       console.log("[v0] Download PDF clicked")
@@ -453,6 +461,7 @@ export default function BRDGenerator() {
       setError(err instanceof Error ? err.message : "Failed to download PDF")
     }
   }
+  */
 
   const handleDownloadDOCX = async () => {
     try {
@@ -470,22 +479,22 @@ export default function BRDGenerator() {
         return
       }
 
-      const diagramCodes = diagrams.filter((d) => d.code && d.code.trim() !== "").map((d) => d.code)
+      const savedDiagrams = diagrams.filter((d) => d.saved)
       const unsavedCount = diagrams.filter((d) => !d.saved).length
 
       if (unsavedCount > 0) {
         console.warn(
-          `[v0] ${unsavedCount} diagram(s) not saved, but proceeding with ${diagramCodes.length} available diagrams`,
+          `[v0] ${unsavedCount} diagram(s) not saved, but proceeding with ${savedDiagrams.length} available diagrams`,
         )
       }
 
-      console.log("[v0] Sending DOCX download request with", diagramCodes.length, "diagrams")
+      console.log("[v0] Sending DOCX download request with", savedDiagrams.length, "diagrams")
       const response = await fetch("/api/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           brdContent,
-          diagrams: diagramCodes,
+          diagrams: savedDiagrams, // Send full objects including encodedImage
         }),
       })
 
@@ -687,16 +696,16 @@ export default function BRDGenerator() {
           <div className="flex items-center justify-between relative">
             {/* Logo on the left */}
             <div className="flex items-center z-10">
-              <Image 
-                src="/logo.png" 
-                alt="Convergenc3" 
-                width={95} 
-                height={32} 
-                className="h-auto object-contain" 
-                priority 
+              <Image
+                src="/logo.png"
+                alt="Convergenc3"
+                width={95}
+                height={32}
+                className="h-auto object-contain"
+                priority
               />
             </div>
-            
+
             {/* Beautifully styled centered title */}
             <div className="absolute left-1/2 transform -translate-x-1/2 top-1/2 -translate-y-1/2">
               <div className="text-center">
@@ -708,7 +717,7 @@ export default function BRDGenerator() {
                 </p>
               </div>
             </div>
-            
+
             {/* Theme toggle and Privacy Notice on the right */}
             <div className="flex items-center gap-4 z-10">
               <PrivacyNotice />
@@ -724,13 +733,12 @@ export default function BRDGenerator() {
             <div key={s.id} className="flex items-center">
               <div className="flex flex-col items-center gap-2">
                 <div
-                  className={`flex size-12 items-center justify-center rounded-xl font-bold transition-all duration-300 ${
-                    currentStepIndex === index
-                      ? "bg-primary text-primary-foreground shadow-lg shadow-primary/30 scale-110"
-                      : currentStepIndex > index
-                        ? "bg-primary/20 text-primary border-2 border-primary/50"
-                        : "bg-muted/50 text-muted-foreground border-2 border-border"
-                  }`}
+                  className={`flex size-12 items-center justify-center rounded-xl font-bold transition-all duration-300 ${currentStepIndex === index
+                    ? "bg-primary text-primary-foreground shadow-lg shadow-primary/30 scale-110"
+                    : currentStepIndex > index
+                      ? "bg-primary/20 text-primary border-2 border-primary/50"
+                      : "bg-muted/50 text-muted-foreground border-2 border-border"
+                    }`}
                 >
                   {currentStepIndex > index ? (
                     <CheckCircle2 className="size-5" />
@@ -746,9 +754,8 @@ export default function BRDGenerator() {
               </div>
               {index < steps.length - 1 && (
                 <div
-                  className={`mx-3 h-0.5 w-16 transition-all duration-300 ${
-                    currentStepIndex > index ? "bg-primary" : "bg-border"
-                  }`}
+                  className={`mx-3 h-0.5 w-16 transition-all duration-300 ${currentStepIndex > index ? "bg-primary" : "bg-border"
+                    }`}
                 />
               )}
             </div>
@@ -994,10 +1001,10 @@ export default function BRDGenerator() {
 
             <Card className="glass-card border-border/50 p-10 shadow-2xl">
               <div className="mb-8 flex flex-wrap items-center justify-center gap-4">
-                <Button onClick={handleDownloadPDF} size="lg" className="min-w-[180px] shadow-lg shadow-primary/20">
+                {/* <Button onClick={handleDownloadPDF} size="lg" className="min-w-[180px] shadow-lg shadow-primary/20">
                   <FileType className="mr-2 size-5" />
                   Download PDF
-                </Button>
+                </Button> */}
 
                 <Button onClick={handleDownloadDOCX} size="lg" className="min-w-[180px] shadow-lg shadow-primary/20">
                   <Download className="mr-2 size-5" />
@@ -1107,7 +1114,6 @@ export default function BRDGenerator() {
 
         <MissingInfoDialog
           isOpen={showMissingInfo}
-          onClose={() => setShowMissingInfo(false)}
           missingItems={missingInfoData?.missingItems || []}
           completenessScore={missingInfoData?.completenessScore || 0}
           onProceed={handleProceedWithInfo}

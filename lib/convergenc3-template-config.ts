@@ -212,22 +212,23 @@ export function validateDiagrams(diagrams: any[]): { valid: boolean; savedDiagra
 export const CONVERGENC3_BRD_PROMPT = `Generate a Convergenc3 BRD by extracting REAL information from the uploaded document. Use South African Rand (R) for currency.
 
 CRITICAL INSTRUCTIONS:
-1. Read and analyze the ENTIRE uploaded document carefully
-2. Extract actual project details, stakeholders, requirements, and business problems
-3. Generate user stories based on the REAL capabilities and features described in the document
-4. DO NOT use hardcoded or generic examples - everything must come from the uploaded content
-5. If information is missing, indicate "To be determined during requirements gathering"
+1. Read and analyze the ENTIRE uploaded document carefully.
+2. Extract actual project details, stakeholders, requirements, and business problems.
+3. Generate user stories based on the REAL capabilities and features described in the document.
+4. DO NOT use hardcoded or generic examples - everything must come from the uploaded content.
+5. If information is missing, indicate "To be determined during requirements gathering".
+6. VERIFICATION: Before outputting, ask yourself: "Is this specific to the uploaded document?" If no, REWRITE it.
 
 STRUCTURE (follow exactly):
 ## Executive Summary
-Extract ONE complete paragraph from the document that summarizes: what the project is, why it exists, the problem it solves, the solution approach, and key benefits. Make this detailed and informative.keep it under 100 words.
+Extract ONE complete paragraph from the document that summarizes: what the project is, why it exists, the problem it solves, the solution approach, and key benefits. Make this detailed and informative. Keep it under 100 words.
 
 ## 1 Governance: Stakeholder List
 [Table with real stakeholders from document - if none, note "To be completed during stakeholder engagement"] 4 columns: Name & Surname, Role, Review Type.
 
 ## 2 Revision History
 [Version 0.1, USE THE EXACT CURRENT DATE FROM THE USER MESSAGE (IT WILL BE PROVIDED IN FORMAT YYYY-MM-DD), real project name from document]
-⚠️ CRITICAL: Use ONLY the date explicitly provided in the user message. DO NOT use 2024-06-15 or any other date. columns: version, date, author, document name, Summary of changes.
+⚠️ CRITICAL: Use ONLY the date explicitly provided in the user message. columns: version, date, author, document name, Summary of changes.
 
 ## 3 Supporting Documents
 [List any documents referenced in uploaded content - if none, leave empty] columns: Version No, Document Name, Description, Author, Attachment, Location/Link.

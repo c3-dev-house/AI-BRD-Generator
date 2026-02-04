@@ -24,70 +24,49 @@ export async function POST(request: NextRequest) {
       messages: [
         {
           role: 'system',
-          content: `You are an expert Business Analyst with 15+ years of experience in requirements gathering and BRD creation.
+          content: `You are an expert Business Analyst with 15+ years of experience.
+Your goal is to identify **BLOCKERS** for generating a high-quality BRD.
 
-Your task is to analyze the ACTUAL DOCUMENT CONTENT and identify MISSING CRITICAL INFORMATION needed for a complete Business Requirements Document.
+**CRITICAL INSTRUCTIONS**:
+1. **Analyze ACTUALLY MISSING Info**: Only flag items that are completely absent and critical. Do NOT flag items that are implied, generic, or "nice to have".
+2. **Context Awareness**: If the document is a "Concept Note" or "High Level Vision", do NOT ask for detailed technical specs.
+3. **Be Specific**: Don't just ask "Who are the stakeholders?". Ask "I see a mention of 'Finance Team', but who is the specific approver?".
+4. **Reasoning**: Provide a brief reason WHY this information is critical.
 
-**CRITICAL**: Base your analysis ONLY on what IS or IS NOT present in the document content provided. Do not assume or guess.
+Check for these elements:
+- Business Problem (Why are we doing this?)
+- Key Objectives (What defines success?)
+- Core Scope (What is in/out?)
+- High-level Requirements (What must it do?)
 
-Check for these essential elements IN THE DOCUMENT:
-1. **Business Problem/Opportunity** - Clear problem statement, root causes, and opportunity description
-2. **Business Objectives** - Specific, measurable goals (SMART criteria)
-3. **Scope** - What's explicitly in scope and out of scope
-4. **Stakeholders** - Named stakeholders with roles and responsibilities
-5. **Current State** - Detailed description of existing processes/systems
-6. **Future State** - Clear vision for the solution and benefits
-7. **Functional Requirements** - Specific features and capabilities
-8. **Non-Functional Requirements** - Performance, security, scalability needs
-9. **Assumptions & Constraints** - Project limitations and assumptions
-10. **Success Criteria** - Measurable KPIs and acceptance criteria
-11. **Timeline/Budget** - Project duration and budget estimates
-12. **Dependencies** - External dependencies and integration requirements
-
-Respond in JSON format:
+Respond in JSON:
 {
   "missingItems": [
     {
-      "category": "Business Objectives",
-      "question": "What are the specific, measurable business objectives for this initiative?",
+      "category": "Stakeholders",
+      "question": "Who is the primary Project Sponsor authorized to approve this budget?",
+      "reason": "Required for the 'Governance' section.",
       "importance": "critical",
-      "suggestedPrompt": "Please provide 3-5 specific business objectives with measurable success criteria (e.g., 'Reduce operational costs by 20% within 12 months')"
+      "suggestedPrompt": "Please name the Project Sponsor."
     }
   ],
-  "completenessScore": 75,
-  "readyToGenerate": false,
-  "recommendations": ["Add specific success metrics with target dates", "Define stakeholder RACI matrix with names"],
-  "foundElements": ["Business Problem", "Current State"]
-}
-
-**Importance Levels**:
-- **critical**: Document cannot be generated without this (Problem, Objectives, Scope)
-- **high**: Significantly impacts document quality (Stakeholders, Success Criteria, Requirements)
-- **medium**: Enhances document completeness (Timeline, Budget, Dependencies)`,
+  "completenessScore": 85,
+  "readyToGenerate": true, <!-- Set to true if gaps are minor -->
+  "recommendations": ["Recommendation 1"]
+}`,
         },
         {
           role: 'user',
-          content: `Analyze this document content for completeness for a ${templateId} BRD template.
+          content: `Analyze this content (${templateId} template):
+          
+${extractedText.slice(0, 50000)}
 
-**DOCUMENT CONTENT**:
-${extractedText.slice(0, 10000)}
-
-${ragContext ? `\n**ADDITIONAL CONTEXT FROM RAG SEARCH**:\n${ragContext.slice(0, 2000)}\n` : ''}
-
-${hasDiagrams ? `\n**NOTE**: User has created ${diagramCount} process diagram(s).\n` : ''}
-
-**INSTRUCTIONS**:
-1. Read the ACTUAL content above carefully
-2. Identify what critical information is ACTUALLY MISSING from the text
-3. Only flag items that are truly absent or incomplete
-4. Generate specific questions that would help complete the BRD
-5. Do NOT assume information is missing if it's implied or partially present
-
-Return JSON with missing items, completeness score (0-100), and recommendations.`,
+${ragContext ? `\nRAG Context:\n${ragContext.slice(0, 5000)}\n` : ''}
+${hasDiagrams ? `\nUser has ${diagramCount} diagrams.` : ''}`,
         },
       ],
-      max_tokens: 2500,
-      temperature: 0.3,
+      max_tokens: 4000,
+      temperature: 0.2,
       response_format: { type: 'json_object' },
     })
 

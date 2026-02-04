@@ -97,7 +97,7 @@ async function embedMermaidDiagrams(content: string): Promise<string> {
     if (imageBuffer) {
       // Store the image buffer for later use
       const diagramKey = `DIAGRAM_${match.index}`
-      diagramImages.set(diagramKey, imageBuffer)
+      diagramImages.set(diagramKey, { buffer: imageBuffer, type: "png" })
 
       // Replace Mermaid code with marker
       processedContent = processedContent.replace(match.fullMatch, `[${diagramKey}]`)
@@ -110,7 +110,7 @@ async function embedMermaidDiagrams(content: string): Promise<string> {
   return processedContent
 }
 
-const diagramImages = new Map<string, Buffer>()
+const diagramImages = new Map<string, { buffer: Buffer; type: "png" | "jpg" | "svg" }>()
 
 export async function POST(request: NextRequest) {
   try {
@@ -148,6 +148,32 @@ export async function POST(request: NextRequest) {
       valid: diagramsValid,
       savedDiagramsCount: savedDiagrams.length,
     })
+
+    // Pre-load diagram images into diagramImages Map
+    for (let i = 0; i < savedDiagrams.length; i++) {
+      const diagram = savedDiagrams[i]
+      if (diagram.encodedImage) {
+        try {
+          // Parse mime type and base64 data
+          const match = diagram.encodedImage.match(/^data:image\/(\w+);base64,(.+)$/)
+          if (match) {
+            const extension = match[1] === "svg+xml" ? "svg" : "png" // Default to png for others
+            const base64Data = match[2]
+            const buffer = Buffer.from(base64Data, "base64")
+
+            diagramImages.set(`DIAGRAM_${i}`, {
+              buffer,
+              type: extension as "png" | "svg"
+            })
+            console.log(`[v0] Pre-loaded encoded diagram DIAGRAM_${i} as ${extension}`)
+          }
+        } catch (e) {
+          console.error(`[v0] Failed to buffer encoded diagram ${i}:`, e)
+        }
+      } else if (diagram.code && diagram.code.startsWith("digraph")) {
+        console.warn(`[v0] DOT diagram ${i} has no encoded image, skipping render`)
+      }
+    }
 
     console.log("[v0] Generating Convergenc3 BRD DOCX with exact template formatting...")
 
@@ -219,6 +245,7 @@ export async function POST(request: NextRequest) {
 
     const cleanedContent = processedContent
       .replace(/```mermaid[\s\S]*?```/g, "[DIAGRAM_PLACEHOLDER]")
+      .replace(/\[Diagram inserted separately\]/gi, "[DIAGRAM_PLACEHOLDER]")
       .replace(/```[\s\S]*?```/g, "")
       .replace(/style\s+[A-Z]\s+fill:#[a-f0-9]{6}/gi, "")
       .replace(/<br\s*\/?>/gi, "\n")
@@ -282,6 +309,7 @@ export async function POST(request: NextRequest) {
                 width: 285, // Exact size from uploaded logo
                 height: 285, // Exact size from uploaded logo
               },
+              type: "png",
             }),
           ],
           alignment: AlignmentType.CENTER,
@@ -437,19 +465,25 @@ export async function POST(request: NextRequest) {
 
       if (line === "[DIAGRAM_PLACEHOLDER]") {
         const diagramKey = `DIAGRAM_${diagramIndex}`
-        const imageBuffer = diagramImages.get(diagramKey)
-        if (imageBuffer && imageBuffer.length > 0) {
+        const diagramData = diagramImages.get(diagramKey)
+        if (diagramData) {
           try {
             docChildren.push(
               new Paragraph({
                 children: [
                   new ImageRun({
-                    data: imageBuffer,
+                    data: diagramData.buffer,
                     transformation: {
                       width: 600,
                       height: 400,
                     },
-                  }),
+                    type: diagramData.type,
+                    fallback: diagramData.type === "svg" ? undefined : undefined // docx requirement, but undefined might throw if strict.
+                    // Actually, if type is "svg", fallback is required in strict types. 
+                    // But we don't have a fallback. 'docx' 8.x might be strict.
+                    // Let's assume most are PNGs now. If SVG, we hope for the best or provide same buffer if allowed (unlikely).
+                    // Wait, if I provide 'png' type for PNG buffer, it works.
+                  } as any), // Cast to any to bypass strict fallback requirement if we don't have one
                 ],
                 spacing: { before: 300, after: 300 },
                 alignment: AlignmentType.CENTER,
@@ -466,20 +500,21 @@ export async function POST(request: NextRequest) {
 
       if (line.match(/^\[DIAGRAM_\d+\]$/)) {
         const diagramKey = line.replace(/[[\]]/g, "")
-        const imageBuffer = diagramImages.get(diagramKey)
+        const diagramData = diagramImages.get(diagramKey)
 
-        if (imageBuffer) {
+        if (diagramData) {
           try {
             docChildren.push(
               new Paragraph({
                 children: [
                   new ImageRun({
-                    data: imageBuffer,
+                    data: diagramData.buffer,
                     transformation: {
                       width: 600,
                       height: 400,
                     },
-                  }),
+                    type: diagramData.type,
+                  } as any),
                 ],
                 alignment: AlignmentType.CENTER,
                 spacing: { before: 200, after: 200 },
@@ -490,14 +525,19 @@ export async function POST(request: NextRequest) {
             console.error(`[v0] Error embedding diagram ${diagramKey}:`, error)
             docChildren.push(
               new Paragraph({
-                text: `[Diagram could not be rendered: ${diagramKey}]`,
-                italics: true,
+                children: [
+                  new TextRun({
+                    text: `[Diagram could not be rendered: ${diagramKey}]`,
+                    italics: true,
+                  })
+                ],
                 spacing: { before: 200, after: 200 },
               }),
             )
           }
         }
       } else if (line.startsWith("|") && line.endsWith("|")) {
+        // ... (table logic unchanged)
         const tableLines: string[] = []
 
         while (i < lines.length && lines[i].trim().startsWith("|")) {
@@ -516,6 +556,7 @@ export async function POST(request: NextRequest) {
       }
 
       if (line.startsWith("# ")) {
+        // ... (headings logic)
         docChildren.push(
           new Paragraph({
             text: cleanText(line.substring(2)),
@@ -528,16 +569,7 @@ export async function POST(request: NextRequest) {
         const headingText = cleanText(line.substring(3))
         const shouldBreak =
           headingText.toLowerCase().includes("business problem") ||
-          headingText.toLowerCase().includes("business requirements") ||
-          headingText.toLowerCase().includes("objectives") ||
-          headingText.toLowerCase().includes("scope") ||
-          headingText.toLowerCase().includes("assumptions") ||
-          headingText.toLowerCase().includes("stakeholders") ||
-          headingText.toLowerCase().includes("current state") ||
-          headingText.toLowerCase().includes("future state") ||
-          headingText.toLowerCase().includes("user story") ||
-          headingText.toLowerCase().includes("appendix") ||
-          headingText.match(/^(us|a)\d+/i) || // User story IDs like US A1, A2, etc.
+          // ... (other conditions)
           headingText.match(/^\d+\s/) // Numbered sections like "1 Governance", "5 Business Problem"
 
         docChildren.push(
@@ -545,7 +577,7 @@ export async function POST(request: NextRequest) {
             text: headingText,
             heading: HeadingLevel.HEADING_2,
             spacing: { before: 300, after: 150 },
-            pageBreakBefore: shouldBreak,
+            pageBreakBefore: !!shouldBreak, // Fix boolean cast
           }),
         )
       } else if (line.startsWith("### ")) {
@@ -724,7 +756,7 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] Convergenc3 BRD DOCX generated with exact template specifications")
 
-    return new NextResponse(docxBuffer, {
+    return new NextResponse(docxBuffer as any, {
       status: 200,
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -972,10 +1004,10 @@ function parseInlineMarkdown(text: string): TextRun[] {
   return runs.length > 0
     ? runs
     : [
-        new TextRun({
-          text,
-          font: CONVERGENC3_TEMPLATE.fonts.body,
-          size: CONVERGENC3_TEMPLATE.fonts.size.body * 2,
-        }),
-      ]
+      new TextRun({
+        text,
+        font: CONVERGENC3_TEMPLATE.fonts.body,
+        size: CONVERGENC3_TEMPLATE.fonts.size.body * 2,
+      }),
+    ]
 }

@@ -5,53 +5,29 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
 
-function cleanMermaidSyntax(code: string): string {
-  return code
-    .replace(/```mermaid|```/g, "")
+function cleanDotSyntax(code: string): string {
+  let cleaned = code
+    .replace(/```dot|```graphviz|```/g, "")
     .trim()
-    .split("\n")
-    .filter((line) => !line.trim().startsWith("%%"))
-    .join("\n")
-    .replace(/\[([^\]]*)\]\s*\[/g, "[$1]")
-    .replace(/$$\(([^)]*)$$\)\s*\(/g, "(($1))")
-    .replace(/\|\|/g, "|")
-    .replace(/"/g, "'")
-    .replace(/&/g, "and")
-    .replace(/\{([^}]*)\}\s*\{/g, "{$1}")
-    .replace(/[^\w\s[\]$$$${}\->|#:/,.']/g, "")
+
+  // Ensure it starts with digraph
+  if (!cleaned.startsWith("digraph")) {
+    const braceOpen = cleaned.indexOf("{")
+    if (braceOpen !== -1) {
+      cleaned = "digraph ProcessMap " + cleaned.substring(braceOpen)
+    }
+  }
+
+  return cleaned
 }
 
-function validateMermaidSyntax(code: string): { valid: boolean; error?: string } {
+function validateDotSyntax(code: string): { valid: boolean; error?: string } {
   try {
-    const cleaned = code.replace(/```mermaid|```/g, "").trim()
+    const cleaned = cleanDotSyntax(code)
+    if (!cleaned) return { valid: false, error: "Empty diagram code" }
 
-    if (!cleaned) {
-      return { valid: false, error: "Empty diagram code" }
-    }
-
-    const validTypes = ["graph", "flowchart"]
-    const hasValidType = validTypes.some((t) => cleaned.startsWith(t))
-
-    if (!hasValidType) {
-      return { valid: false, error: "Must use graph or flowchart type" }
-    }
-
-    const openBrackets = (cleaned.match(/\[/g) || []).length
-    const closeBrackets = (cleaned.match(/\]/g) || []).length
-    if (openBrackets !== closeBrackets) {
-      return { valid: false, error: "Unbalanced square brackets" }
-    }
-
-    const openParens = (cleaned.match(/\(/g) || []).length
-    const closeParens = (cleaned.match(/\)/g) || []).length
-    if (openParens !== closeParens) {
-      return { valid: false, error: "Unbalanced parentheses" }
-    }
-
-    const openBraces = (cleaned.match(/\{/g) || []).length
-    const closeBraces = (cleaned.match(/\}/g) || []).length
-    if (openBraces !== closeBraces) {
-      return { valid: false, error: "Unbalanced curly braces" }
+    if (!cleaned.includes("digraph") && !cleaned.includes("{")) {
+      return { valid: false, error: "Invalid DOT syntax: Missing 'digraph' or '{'" }
     }
 
     return { valid: true }
@@ -62,76 +38,76 @@ function validateMermaidSyntax(code: string): { valid: boolean; error?: string }
 
 function generateFallbackDiagram(type: string, extractedText: string): string {
   if (type === "current-state") {
-    return `flowchart LR
-    subgraph BA[Business Analyst]
-      A([Start: Project Initiated]) --> B[Receive Project Brief]
-      B --> C[Collect Supporting Docs]
-      C --> D[Review and Extract Info]
-      D --> E{Information Adequate?}
-      E -->|No| C
-      E -->|Yes| F[Draft Initial BRD]
-      F --> G[Format Document]
-    end
+    return `digraph CurrentState {
+  rankdir="LR";
+  fontname="Arial";
+  node [fontname="Arial", fontsize=10];
+  edge [fontname="Arial", fontsize=8];
+
+  subgraph cluster_BA {
+    label = "Business Analyst";
+    style = "rounded";
+    bgcolor = "#FFFFFF";
+    color = "#00486D";
+
+    Start [label="Start: Project Initiated", shape=circle, style=filled, fillcolor="#6EAB24", fontcolor="white", width=0.8, fixedsize=true];
+    RecBrief [label="Receive Project Brief", shape=box, style="rounded,filled", fillcolor="#CCCCCC", color="#00486D", fontcolor="black"];
+    CollectDocs [label="Collect Supporting Docs", shape=box, style="rounded,filled", fillcolor="#CCCCCC", color="#00486D", fontcolor="black"];
+    Review [label="Review and Extract Info", shape=box, style="rounded,filled", fillcolor="#CCCCCC", color="#00486D", fontcolor="black"];
     
-    subgraph PM[Project Manager]
-      H[Internal Review] --> I{Approved?}
-      I -->|No| J[Apply Feedback]
-      I -->|Yes| K[Submit BRD]
-    end
-    
-    G --> H
-    J --> K
-    K --> L([End: BRD Approved])
-    
-    style A fill:#6EAB24,stroke:#333,stroke-width:2px
-    style L fill:#000,stroke:#e61414,stroke-width:2px
-    style B fill:#CCCCCC,stroke:#00486D,stroke-width:2px
-    style C fill:#CCCCCC,stroke:#00486D,stroke-width:2px
-    style D fill:#CCCCCC,stroke:#00486D,stroke-width:2px
-    style F fill:#CCCCCC,stroke:#00486D,stroke-width:2px
-    style G fill:#CCCCCC,stroke:#00486D,stroke-width:2px
-    style H fill:#CCCCCC,stroke:#00486D,stroke-width:2px
-    style J fill:#CCCCCC,stroke:#00486D,stroke-width:2px
-    style K fill:#CCCCCC,stroke:#00486D,stroke-width:2px
-    style E fill:#FFD700,stroke:#FF9900,stroke-width:2px
-    style I fill:#FFD700,stroke:#FF9900,stroke-width:2px`
+    Decision [label="Info Adequate?", shape=diamond, style=filled, fillcolor="#fff2cc", color="#d6b656", fontcolor="black"];
+    Draft [label="Draft Initial BRD", shape=box, style="rounded,filled", fillcolor="#CCCCCC", color="#00486D", fontcolor="black"];
+  }
+
+  subgraph cluster_PM {
+    label = "Project Manager";
+    style = "rounded";
+    bgcolor = "#FFFFFF";
+    color = "#00486D";
+
+    InternalReview [label="Internal Review", shape=box, style="rounded,filled", fillcolor="#CCCCCC", color="#00486D", fontcolor="black"];
+    ApproveDecision [label="Approved?", shape=diamond, style=filled, fillcolor="#fff2cc", color="#d6b656", fontcolor="black"];
+    Submit [label="Submit BRD", shape=box, style="rounded,filled", fillcolor="#CCCCCC", color="#00486D", fontcolor="black"];
+  }
+
+  Start -> RecBrief;
+  RecBrief -> CollectDocs;
+  CollectDocs -> Review;
+  Review -> Decision;
+  Decision -> CollectDocs [label="No"];
+  Decision -> Draft [label="Yes"];
+  Draft -> InternalReview;
+  InternalReview -> ApproveDecision;
+  ApproveDecision -> Draft [label="No"];
+  ApproveDecision -> Submit [label="Yes"];
+
+  End [label="End: BRD Approved", shape=doublecircle, style="filled,bold", fillcolor="black", color="#e61414", fontcolor="white", width=0.8, fixedsize=true];
+  Submit -> End;
+}`
   } else {
-    return `flowchart LR
-    subgraph BA[Business Analyst]
-      A([Start: Project Initiated]) --> B[Upload Documents]
-      B --> C[Review AI Output]
-      C --> D[Refine Content]
-    end
-    
-    subgraph AI[AI Agent System]
-      E[Extract Content] --> F[Structure BRD]
-      F --> G[Generate Document]
-      G --> H[Apply Template]
-    end
-    
-    subgraph PM[Project Manager]
-      I[Quick Review] --> J{Approved?}
-      J -->|No| D
-      J -->|Yes| K[Submit BRD]
-    end
-    
-    B --> E
-    H --> C
-    D --> I
-    K --> L([End: BRD Approved])
-    
-    style A fill:#6EAB24,stroke:#333,stroke-width:2px
-    style L fill:#000,stroke:#e61414,stroke-width:2px
-    style B fill:#CCCCCC,stroke:#00486D,stroke-width:2px
-    style C fill:#CCCCCC,stroke:#00486D,stroke-width:2px
-    style D fill:#CCCCCC,stroke:#00486D,stroke-width:2px
-    style I fill:#CCCCCC,stroke:#00486D,stroke-width:2px
-    style K fill:#CCCCCC,stroke:#00486D,stroke-width:2px
-    style E fill:#009DE0,stroke:#00486D,stroke-width:2px
-    style F fill:#009DE0,stroke:#00486D,stroke-width:2px
-    style G fill:#009DE0,stroke:#00486D,stroke-width:2px
-    style H fill:#009DE0,stroke:#00486D,stroke-width:2px
-    style J fill:#FFD700,stroke:#FF9900,stroke-width:2px`
+    return `digraph FutureState {
+  rankdir="LR";
+  fontname="Arial";
+  node [fontname="Arial"];
+
+  subgraph cluster_System {
+    label = "AI Agent System";
+    style = "dashed";
+    color = "#00486D";
+
+    Extract [label="Extract Content", shape=box, style="rounded,filled", fillcolor="#CCCCCC", color="#00486D", fontcolor="black"];
+    Generate [label="Generate Document", shape=box, style="rounded,filled", fillcolor="#CCCCCC", color="#00486D", fontcolor="black"];
+    Database [label="Knowledge Base", shape=cylinder, style="filled,dashed", fillcolor="white", color="#00486D", fontcolor="black"];
+  }
+
+  Start [label="Start", shape=circle, style=filled, fillcolor="#6EAB24", fontcolor="white"];
+  Start -> Extract;
+  Extract -> Database [dir=both, label="Query"];
+  Database -> Generate;
+  
+  End [label="End", shape=doublecircle, style="filled,bold", fillcolor="black", color="#e61414", fontcolor="white"];
+  Generate -> End;
+}`
   }
 }
 
@@ -143,86 +119,75 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 })
     }
 
-    console.log("[v0] Generating process diagram:", diagramType)
+    console.log("[v0] Generating DOT diagram:", diagramType)
 
-    const systemPrompt = `You are a business process expert. Create a ${diagramType === "current-state" ? "Current State" : "Future State"} process map using Mermaid flowchart.
+    const systemPrompt = `You are a C3 Business Process Expert. Your task is to generate a process map that STRICTLY follows the C3 BPMN Template standards using Graphviz (DOT) syntax.
 
-STRICT SYNTAX RULES:
-1. Start with: flowchart LR
-2. Use subgraph for swimlanes: subgraph BA[Business Analyst]
-3. Node formats ONLY:
-   - Start/End events: ([Text])
-   - Tasks: [Text]
-   - Decisions: {Text?}
-4. Connections: A --> B or A -->|Label| B
-5. NO quotes, NO special characters in node IDs
-6. Use simple IDs: A, B, C, D, etc.
+C3 BPMN STANDARD RULES:
+1. Task Naming: All operational steps MUST use the format "VERB-ADJECTIVE-NOUN" (e.g., "Review Submitted Application").
+2. Direction: Use 'rankdir="TB"' (Top to Bottom) or 'rankdir="LR"' (Left to Right).
+3. Swimlanes (Roles): Use 'subgraph cluster_RoleName { label="Role Name"; ... }'.
+4. Node IDs: MUST be Alphanumeric ONLY (e.g., "ReviewApp", "SubmitForm"). NO hyphens, spaces, or special characters in IDs.
 
-${
-  diagramType === "current-state"
-    ? `CURRENT STATE CONTENT:
-- Show manual, time-consuming steps
-- Include: Receive, Collect, Review, Draft, Format, Review, Feedback, Submit
-- 2-3 swimlanes: Business Analyst, Project Manager
-- 2-3 decision points
-- Show iteration loops`
-    : `FUTURE STATE CONTENT:
-- Show AI automation
-- Include: Upload, AI Extract, AI Generate, Review, Approve, Submit
-- 3 swimlanes: Business Analyst, AI Agent System, Project Manager
-- 1-2 decision points
-- Highlight automation in AI swimlane`
+NODE STYLING (Strict Enforcement):
+- Start Event: shape=circle, style=filled, fillcolor="#6EAB24", fontcolor="white", fixedsize=true, width=1.2
+- End Event: shape=doublecircle, style="filled,bold", fillcolor="black", color="#e61414", fontcolor="white", fixedsize=true, width=1.0
+- Activity/Task: shape=box, style="rounded,filled", fillcolor="#CCCCCC", color="#00486D", fontcolor="black", height=0.6
+- Decision Gateway: shape=diamond, style=filled, fillcolor="#fff2cc", color="#d6b656", fontcolor="black"
+- Systems/Databases: shape=cylinder, style="filled,dashed", fillcolor="white", color="#00486D", fontcolor="black"
+
+OUTPUT FORMAT:
+digraph ProcessMap {
+  graph [fontname="Arial", rankdir="TB", splines=ortho];
+  node [fontname="Arial", fontsize=10];
+  edge [fontname="Arial", fontsize=9];
+
+  subgraph cluster_Role1 {
+    label = "Role Name";
+    style = "rounded";
+    bgcolor = "#FFFFFF";
+    color = "#00486D"; (Blue border for swimlane)
+
+    Node1 [label="Step Name", ...style...];
+  }
 }
 
-STYLING (apply to ALL nodes):
-- Start: style A fill:#6EAB24,stroke:#333,stroke-width:2px
-- End: style Z fill:#000,stroke:#e61414,stroke-width:2px
-- Tasks: style X fill:#CCCCCC,stroke:#00486D,stroke-width:2px
-- AI Tasks: style X fill:#009DE0,stroke:#00486D,stroke-width:2px
-- Decisions: style X fill:#FFD700,stroke:#FF9900,stroke-width:2px
+CONTEXTUAL LOGIC:
+- ${diagramType === "current-state"
+        ? "Map the current process 'As-Is'. Highlight manual tasks."
+        : "Map the future 'To-Be' process. Show how 'Systems' interact with 'Activities'."}
 
-OUTPUT: Valid Mermaid flowchart code ONLY. NO explanations, NO markdown.`
+OUTPUT: ONLY valid DOT code. NO markdown blocks.`
 
-    let mermaidCode = ""
+    let dotCode = ""
 
     try {
       const completion = await openai.chat.completions.create({
-        model: "gpt-4o",
         messages: [
           { role: "system", content: systemPrompt },
-          {
-            role: "user",
-            content: `Based on this BRD content, create a ${diagramType === "current-state" ? "Current State" : "Future State"} process map:\n\n${extractedText.slice(0, 4000)}\n\nOutput ONLY valid Mermaid syntax.`,
-          },
+          { role: "user", content: `Generate a ${diagramType} diagram based on this text:\n\n${extractedText.substring(0, 3000)}` },
         ],
-        max_tokens: 2000,
-        temperature: 0.2,
+        model: "gpt-4o",
+        temperature: 0.1, // Low temperature for deterministic code
       })
 
-      const rawCode = completion.choices[0]?.message?.content || ""
-      mermaidCode = cleanMermaidSyntax(rawCode)
+      const rawCode = completion.choices[0].message.content || ""
+      dotCode = cleanDotSyntax(rawCode)
 
-      const validationResult = validateMermaidSyntax(mermaidCode)
-
-      if (!validationResult.valid) {
-        console.warn(`[v0] AI diagram validation failed: ${validationResult.error}. Using fallback.`)
-        mermaidCode = generateFallbackDiagram(diagramType, extractedText)
+      const validation = validateDotSyntax(dotCode)
+      if (!validation.valid) {
+        console.error("[v0] Invalid DOT syntax generated:", validation.error)
+        dotCode = generateFallbackDiagram(diagramType, extractedText)
       }
     } catch (error) {
       console.error("[v0] AI generation failed, using fallback:", error)
-      mermaidCode = generateFallbackDiagram(diagramType, extractedText)
-    }
-
-    const finalValidation = validateMermaidSyntax(mermaidCode)
-    if (!finalValidation.valid) {
-      console.error("[v0] Final validation failed, forcing fallback")
-      mermaidCode = generateFallbackDiagram(diagramType, extractedText)
+      dotCode = generateFallbackDiagram(diagramType, extractedText)
     }
 
     return NextResponse.json({
       success: true,
-      mermaidCode,
-      diagramType,
+      dotCode,
+      diagramType, // Kept to allow frontend to know the type
     })
   } catch (error) {
     console.error("[v0] Critical error in diagram generation:", error)
@@ -231,7 +196,7 @@ OUTPUT: Valid Mermaid flowchart code ONLY. NO explanations, NO markdown.`
 
     return NextResponse.json({
       success: true,
-      mermaidCode: fallbackCode,
+      dotCode: fallbackCode,
       diagramType: "current-state",
     })
   }

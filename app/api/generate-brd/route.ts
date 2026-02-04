@@ -106,7 +106,7 @@ ${truncatedText}${contextSection}${missingInfoSection}
 **Remember: This BRD must be based on the REAL project described in the documentation, not generic examples.**`
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4.1",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
@@ -117,7 +117,7 @@ ${truncatedText}${contextSection}${missingInfoSection}
           content: userMessage,
         },
       ],
-      max_tokens:  32768, // Increased for comprehensive BRDs
+      max_tokens: 16384, // Increased for comprehensive BRDs
       temperature: 0.7,
     })
 

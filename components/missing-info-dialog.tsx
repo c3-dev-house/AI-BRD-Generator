@@ -10,6 +10,7 @@ import { AlertTriangle, CheckCircle2, ArrowRight, X } from "lucide-react"
 interface MissingItem {
   category: string
   question: string
+  reason?: string
   importance: "critical" | "high" | "medium"
   suggestedPrompt: string
 }
@@ -84,19 +85,19 @@ export function MissingInfoDialog({
             <div key={index} className="rounded-xl border border-border/50 bg-muted/10 p-6">
               <div className="mb-3 flex items-center gap-3">
                 <span
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                    item.importance === "critical"
-                      ? "bg-destructive/20 text-destructive"
-                      : item.importance === "high"
-                        ? "bg-amber-500/20 text-amber-600 dark:text-amber-400"
-                        : "bg-primary/20 text-primary"
-                  }`}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${item.importance === "critical"
+                    ? "bg-destructive/20 text-destructive"
+                    : item.importance === "high"
+                      ? "bg-amber-500/20 text-amber-600 dark:text-amber-400"
+                      : "bg-primary/20 text-primary"
+                    }`}
                 >
                   {item.importance.toUpperCase()}
                 </span>
                 <h3 className="font-semibold text-foreground">{item.category}</h3>
               </div>
-              <p className="mb-4 text-sm text-muted-foreground">{item.question}</p>
+              <p className="mb-2 text-sm text-foreground font-medium">{item.question}</p>
+              {item.reason && <p className="mb-4 text-xs text-muted-foreground italic">Reason: {item.reason}</p>}
               <div>
                 <Label htmlFor={`answer-${index}`} className="mb-2 block text-sm text-foreground">
                   {item.suggestedPrompt}

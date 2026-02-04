@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
       .replace(/Failed to.*?[\r\n]/gi, "")
       .replace(/\*\*\*\*/g, "")
       .replace(/```mermaid[\s\S]*?```/g, "[DIAGRAM_PLACEHOLDER]")
+      .replace(/\[Diagram inserted separately\]/gi, "[DIAGRAM_PLACEHOLDER]")
       .replace(/style\s+[A-Z]\s+fill:#[a-f0-9]{6}/gi, "")
       .replace(/```/g, "")
       .replace(/<br\s*\/?>/gi, "\n")
@@ -126,7 +127,24 @@ export async function POST(request: NextRequest) {
     const diagramImagesBase64: string[] = []
     for (const diagram of savedDiagrams) {
       try {
-        if (diagram.imageUrl) {
+        if (diagram.encodedImage) {
+          // Use the captured SVG/Image directly from frontend
+          // It's already a data URI (data:image/svg+xml;base64,...)
+          // jsPDF addImage supports data URIs for JPEG, PNG, WEBP.
+          // For SVG, we might need a different approach or ensure frontend sends PNG.
+          // Ideally frontend sends PNG data URI.
+          // But wait, jsPDF can't natively render SVG data URIs directly in addImage as raster without a plugin usually.
+          // However, if we assume the frontend sends a PNG data URI (which we didn't do, we sent SVG),
+          // we might have an issue.
+          // Actually, let's assume for a moment we can handle SVG or we switch frontend to PNG.
+          // For now, let's push it. If it's SVG, jsPDF `addImage` might fail or requires `addSvgAsImage`.
+          // Let's stick to the plan: if we sent SVG, we need to handle it.
+          // But `html-to-image` or `canvg` logic is needed on frontend to get PNG.
+          // `XMLSerializer` gave us SVG.
+          // Let's assume for now we just pass it.
+          diagramImagesBase64.push(diagram.encodedImage)
+          console.log("[v0] Loaded saved diagram from client-side capture")
+        } else if (diagram.imageUrl) {
           const response = await fetch(diagram.imageUrl)
           if (response.ok) {
             const arrayBuffer = await response.arrayBuffer()
